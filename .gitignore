@@ -1,0 +1,14 @@
+# ESC-50 is CC BY-NC: download it yourself (README), don't redistribute it
+data/
+firmware/main/clips.bin
+# Built by tools/convert.py and idf.py
+build_py/
+firmware/build*/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.old
+.venv/
+__pycache__/
+*.log
+esc50.zip
+.DS_Store

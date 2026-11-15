@@ -1,0 +1,8 @@
+tensorflow==2.21.0
+tf_keras==2.21.0
+numpy==2.5.4
+h5py==3.14.0
+soundfile==0.14.0
+resampy==0.4.3
+numba==0.68.1
+llvmlite==0.50.0
