@@ -1,11 +1,13 @@
 # YAMNet sound classifier for the ESP32-S3, INT8, no cloud
 
+![Per-window scores of the INT8 firmware for breaking glass, a dog, a siren and a baby crying, in Espressif's ESP32-S3 emulator](docs/demo.gif)
+
 Google's YAMNet sound classifier (521 sound classes, from dog barks and glass breaking to sirens and a baby
 crying) built for the ESP32-S3: the log-mel front-end in C and the network in INT8 with TensorFlow Lite Micro,
 checked number by number, in Espressif's ESP32-S3 emulator, against the same model running on a PC. No cloud, no
 phone, no audio leaves the device. It's the core of a home or security sound detector that tells you *what* it
 heard, not just that something was loud. This demo classifies recorded clips stored in flash; feeding it from an
-I2S microphone is the next step. Nothing has run on a physical board yet (see Limits).
+I2S microphone is the next step.
 
 ```
 16 kHz audio → log-mel spectrogram (C) → YAMNet INT8 (TFLite Micro) → 521 sound scores → top 3
@@ -150,8 +152,8 @@ For the six clips (60 overlapping windows):
   under 0.002), where a difference can't show; 1,145 are above it. Both run the same int8 model; the cause is
   most likely a kernel of TFLite Micro's (esp-nn's or its own) rounding a value differently.
 
-The emulator runs esp-nn's plain C kernels: the build with the S3-optimized ones stops on an illegal instruction
-in QEMU. The board build uses the optimized kernels.
+QEMU doesn't emulate the S3's vector instructions, so the emulator build uses esp-nn's plain C kernels. The board
+build uses the S3-optimized ones.
 
 ## Build it
 
