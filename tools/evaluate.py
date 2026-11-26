@@ -93,9 +93,9 @@ def map_indices():
 
 class Model:
     def __init__(self, path):
-        # TFLite's reference kernels: in the emulator, esp-nn's C kernels give the same outputs
-        # but for 3 of 31,260, off by at most 3 steps (tools/check_qemu.py). The default
-        # optimized ones round differently.
+        # TFLite's reference kernels: on the board and in the emulator, TFLite Micro gives the same outputs
+        # but for 3 of 31,260, off by at most 3 steps (tools/check_dump.py). TFLite's default
+        # (optimized) PC kernels round differently.
         self.it = tf.lite.Interpreter(model_path=str(path),
                                       experimental_op_resolver_type=tf.lite.experimental.OpResolverType.BUILTIN_REF)
         self.it.allocate_tensors()

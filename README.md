@@ -1,10 +1,11 @@
 # YAMNet sound classifier for the ESP32-S3, INT8, no cloud
 
-![Per-window scores of the INT8 firmware for breaking glass, a dog, a siren and a baby crying, in Espressif's ESP32-S3 emulator](docs/demo.gif)
+![Per-window scores of the INT8 firmware for breaking glass, a dog, a siren and a baby crying](docs/demo.gif)
 
 Google's YAMNet sound classifier (521 sound classes, from dog barks and glass breaking to sirens and a baby
 crying) built for the ESP32-S3: the log-mel front-end in C and the network in INT8 with TensorFlow Lite Micro,
-checked number by number, in Espressif's ESP32-S3 emulator, against the same model running on a PC. No cloud, no
+checked number by number against the same model running on a PC. On an ESP32-S3 dev board it takes 282 ms per 0.96 s
+window, with a new window every 0.48 s, fast enough for live audio on one of the chip's two cores. No cloud, no
 phone, no audio leaves the device. It's the core of a home or security sound detector that tells you *what* it
 heard, not just that something was loud. This demo classifies recorded clips stored in flash; feeding it from an
 I2S microphone is the next step.
@@ -83,10 +84,13 @@ Both fixes are in `tools/convert.py`: `--naive` builds the plain version and `--
 ## On the ESP32-S3
 
 - **Model:** 4.06 MB in flash, read in place; about 69 M multiply-accumulates per 0.96 s window.
+- **Speed:** 282 ms per 0.96 s window for the network alone with esp-nn's S3-optimized kernels (4,030 ms, 14× slower,
+  with its plain C kernels), plus 66 ms of front-end per second of audio. Windows come every 0.48 s, so live
+  audio needs about 314 ms of every 480 on one core, and the other core is free. Measured at 240 MHz on one
+  ESP32-S3 N32R16V dev board (octal flash, PSRAM unused); the weights are read from flash on every window, so a
+  board with quad flash may be slower (not measured).
 - **Working memory:** 264 KB of internal RAM reserved for TFLite Micro's tensors, so no PSRAM is needed. TFLite
-  Micro reports 238 KB used with esp-nn's plain C kernels and 254 KB with its S3-optimized ones, both read in
-  the emulator: memory is allocated before the first inference, so the optimized build reports its figure before
-  it reaches the instruction QEMU can't run (see below).
+  Micro reports 254 KB used with esp-nn's S3-optimized kernels and 238 KB with its plain C ones.
 - **Firmware image:** 5.35 MB with the model and the six test clips (0.96 MB) embedded; fits 8 MB of flash.
 - **Front-end:** `firmware/main/frontend.c`, the same log-mel math as YAMNet's TensorFlow front-end (25 ms Hann
   window, 10 ms hop, 64 mel bands from 125 Hz to 7.5 kHz) in plain C with its own FFT. Its Python twin,
@@ -94,36 +98,37 @@ Both fixes are in `tools/convert.py`: `--naive` builds the plain version and `--
 
 The firmware classifies six ESC-50 clips embedded at build time (dog, glass breaking, knock on a door, crying baby,
 siren, alarm clock) and prints the top 3 sounds for each ("patches" are the 0.96 s windows, taken every 0.48 s).
-Output in Espressif's QEMU emulator, with the dump, the arena line and the per-window time removed (the
-emulator's time says nothing about the chip's):
+Output on the board, without the boot log:
 
 ```
-dog: 5.00 s, 10 patches
+arena: 254 of 264 KB used
+
+dog: 5.00 s, 10 patches, 282 ms per patch, front-end 331 ms
   0.94  Animal
   0.93  Dog
   0.93  Domestic animals, pets
 
-glass_breaking: 5.00 s, 10 patches
+glass_breaking: 5.00 s, 10 patches, 282 ms per patch, front-end 331 ms
   0.17  Glass
   0.15  Chink, clink
   0.08  Breaking
 
-door_wood_knock: 5.00 s, 10 patches
+door_wood_knock: 5.00 s, 10 patches, 282 ms per patch, front-end 331 ms
   0.18  Knock
   0.13  Door
   0.09  Bouncing
 
-crying_baby: 5.00 s, 10 patches
+crying_baby: 5.00 s, 10 patches, 282 ms per patch, front-end 330 ms
   0.89  Crying, sobbing
   0.84  Baby cry, infant cry
   0.10  Whimper
 
-siren: 5.00 s, 10 patches
+siren: 5.00 s, 10 patches, 282 ms per patch, front-end 330 ms
   0.40  Alarm
   0.40  Siren
   0.25  Civil defense siren
 
-clock_alarm: 5.00 s, 10 patches
+clock_alarm: 5.00 s, 10 patches, 282 ms per patch, front-end 331 ms
   0.55  Alarm clock
   0.46  Beep, bleep
   0.38  Alarm
@@ -134,7 +139,7 @@ done
 Scores are averaged over the clip's ten 0.96 s windows, so short sounds like the glass break and the knock score
 low even when they rank first. A detector acts on each window as it arrives instead, and there the sound is
 clear: the glass break's first window scores 0.94 for Glass, and the knock's first two score 0.84 and 0.86 for
-Knock (from the same emulator run). Silence is left out of the top 3, since it's not something a detector
+Knock (read from the dump described below). Silence is left out of the top 3, since it's not something a detector
 reports.
 
 ### Checked against the Python pipeline
@@ -142,8 +147,8 @@ reports.
 Why it matters: the accuracy table was measured on a PC, and this shows the firmware computes the same numbers.
 
 With `CONFIG_YAMNET_DUMP=y` the firmware prints every int8 input it feeds the model and every int8 output it
-gets back, and `tools/check_qemu.py` compares them with the Python front-end and with TFLite on the same input.
-For the six clips (60 overlapping windows):
+gets back, and `tools/check_dump.py` compares them with the Python front-end and with TFLite on the same input.
+For the six clips (60 overlapping windows), on the board:
 
 - **Front-end:** 8 of the 368,640 model-input values differ from Python, each by 1 step: values within float
   error of a rounding boundary.
@@ -152,8 +157,9 @@ For the six clips (60 overlapping windows):
   under 0.002), where a difference can't show; 1,145 are above it. Both run the same int8 model; the cause is
   most likely a kernel of TFLite Micro's (esp-nn's or its own) rounding a value differently.
 
-QEMU doesn't emulate the S3's vector instructions, so the emulator build uses esp-nn's plain C kernels. The board
-build uses the S3-optimized ones.
+The board (esp-nn's S3-optimized kernels) and Espressif's QEMU emulator (esp-nn's plain C kernels, since QEMU doesn't
+emulate the S3's vector instructions) print the same dump byte for byte, so the optimized kernels change no result
+on these 60 windows.
 
 ## Build it
 
@@ -178,6 +184,16 @@ cd firmware
 idf.py build flash monitor                    # an ESP32-S3 with 8 MB of flash or more
 ```
 
+The number-by-number check on the board, from `firmware/`:
+
+```sh
+idf.py -B build_dump -D SDKCONFIG=build_dump/sdkconfig \
+  -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.dump" build flash
+python -m serial.tools.miniterm /dev/YOUR_UART_PORT 115200 | tee board.log  # the UART port, not native USB
+# press the board's reset button, quit with Ctrl-] once it prints "done"
+cd .. && .venv/bin/python tools/check_dump.py firmware/board.log
+```
+
 To see how alpha was picked, build another strength (`.venv/bin/python tools/convert.py --alpha 0.3`) and score
 it on fold 4: `FOLD=4 .venv/bin/python tools/evaluate.py build_py/yamnet_core_int8_a0.3.tflite`.
 
@@ -191,16 +207,14 @@ cd build_qemu && esptool.py --chip esp32s3 merge_bin --fill-flash-size 8MB -o fl
 qemu-system-xtensa -nographic -machine esp32s3 -drive file=flash.bin,if=mtd,format=raw \
   -global driver=timer.esp32s3.timg,property=wdt_disable,value=true | tee ../qemu.log
 # quit QEMU with Ctrl-A X once it prints "done"
-cd ../.. && .venv/bin/python tools/check_qemu.py firmware/qemu.log
+cd ../.. && .venv/bin/python tools/check_dump.py firmware/qemu.log
 ```
 
-`sdkconfig.qemu` switches esp-nn to its plain C kernels and `sdkconfig.dump` turns on the dump.
+`sdkconfig.qemu` switches esp-nn to its plain C kernels and the flash to DIO (QEMU boot-loops on a QIO image);
+`sdkconfig.dump` turns on the dump.
 
 ## Limits
 
-- Not yet run on a physical board. Everything above was checked in Espressif's emulator with esp-nn's plain C
-  kernels; the board build compiles with the S3-optimized kernels, but their outputs and timing aren't measured
-  yet, so no per-window latency is given here.
 - The six clips are the first fold-5 clip of each category that the model gets right (`tools/make_clips.py`), to
   show the output format; accuracy is what the table measures.
 - ESC-50 clips are clean, single-sound recordings. A real room adds noise, reverb and overlapping sounds, so

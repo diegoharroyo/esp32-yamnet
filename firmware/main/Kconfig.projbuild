@@ -1,5 +1,5 @@
 menu "YAMNet demo"
     config YAMNET_DUMP
-        bool "Print every patch's int8 input and output (read by tools/check_qemu.py)"
+        bool "Print every patch's int8 input and output (read by tools/check_dump.py)"
         default n
 endmenu

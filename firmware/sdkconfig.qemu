@@ -1,2 +1,4 @@
 # QEMU does not emulate the S3 vector instructions esp-nn uses, so this build takes its plain C kernels.
 CONFIG_NN_ANSI_C=y
+# QEMU boot-loops on a quad-I/O flash image.
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y

@@ -104,7 +104,9 @@ extern "C" void app_main(void)
             printf("no %d bytes for %.32s's features\n", frames * FE_NMEL, label);
             return;
         }
+        int64_t fe_t0 = esp_timer_get_time();
         frontend_frames(pcm, n, in->params.scale, in->params.zero_point, mel);
+        int64_t fe_us = esp_timer_get_time() - fe_t0;
         int patches = 1 + (frames - FE_PATCH) / FE_PATCH_HOP;
 
         static float score[kClasses];
@@ -129,8 +131,8 @@ extern "C" void app_main(void)
         }
         free(mel);
 
-        printf("\n%.32s: %.2f s, %d patches, %lld ms per patch\n", label, n / 16000.0, patches,
-               us / patches / 1000);
+        printf("\n%.32s: %.2f s, %d patches, %lld ms per patch, front-end %lld ms\n", label, n / 16000.0,
+               patches, us / patches / 1000, fe_us / 1000);
         int top[3] = {-1, -1, -1};
         for (int k = 0; k < kClasses; k++)
             for (int j = 0; j < 3 && k != kSilence; j++)

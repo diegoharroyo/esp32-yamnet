@@ -14,7 +14,7 @@ The check fails on a bigger difference, or when more than 0.1% of the values dif
 Outputs at the lowest code (score < 0.002) can't show a logit error, so it also prints how
 many are above it.
 
-    python tools/check_qemu.py firmware/qemu.log
+    python tools/check_dump.py firmware/qemu.log   (or the board's serial log)
 """
 import struct
 import sys
